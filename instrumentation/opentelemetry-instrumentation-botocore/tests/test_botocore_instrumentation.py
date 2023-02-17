@@ -39,6 +39,10 @@ from opentelemetry.propagate import get_global_textmap, set_global_textmap
 from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.test.mock_textmap import MockTextMapPropagator
 from opentelemetry.test.test_base import TestBase
+from opentelemetry.trace.span import Span, format_span_id, format_trace_id
+from opentelemetry.propagators.aws.aws_xray_propagator import (
+     TRACE_HEADER_KEY,
+)
 
 _REQUEST_ID_REGEX_MATCH = r"[A-Z0-9]{52}"
 
@@ -306,17 +310,14 @@ class TestBotocoreInstrumentor(TestBase):
                 "EC2", "DescribeInstances", request_id=request_id
             )
 
-            self.assertIn(MockTextMapPropagator.TRACE_ID_KEY, headers)
-            self.assertEqual(
-                str(span.get_span_context().trace_id),
-                headers[MockTextMapPropagator.TRACE_ID_KEY],
-            )
-            self.assertIn(MockTextMapPropagator.SPAN_ID_KEY, headers)
-            self.assertEqual(
-                str(span.get_span_context().span_id),
-                headers[MockTextMapPropagator.SPAN_ID_KEY],
-            )
+            # only x-ray propagation is used in HTTP requests
+            self.assertIn(TRACE_HEADER_KEY, headers)
+            xray_context = headers[TRACE_HEADER_KEY]
+            formated_trace_id = format_trace_id(span.get_span_context().trace_id)
+            formated_trace_id = formated_trace_id[:8] + "-" + formated_trace_id[8:]
 
+            self.assertEqual(xray_context.lower(),
+                             f"root=1-{formated_trace_id};parent={format_span_id(span.get_span_context().span_id)};sampled=1".lower())
         finally:
             set_global_textmap(previous_propagator)
 

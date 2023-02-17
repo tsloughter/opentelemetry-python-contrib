@@ -101,19 +101,24 @@ from opentelemetry.instrumentation.utils import (
     _SUPPRESS_INSTRUMENTATION_KEY,
     unwrap,
 )
-from opentelemetry.propagate import inject
+from opentelemetry.propagators.aws.aws_xray_propagator import (
+    AwsXRayPropagator,
+)
 from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_tracer
 from opentelemetry.trace.span import Span
 
 logger = logging.getLogger(__name__)
 
-
 # pylint: disable=unused-argument
 def _patched_endpoint_prepare_request(wrapped, instance, args, kwargs):
     request = args[0]
     headers = request.headers
-    inject(headers)
+
+    # Only the x-ray header is propagated by AWS services. Using any
+    # other propagator will lose the trace context.
+    AwsXRayPropagator().inject(headers)
+
     return wrapped(*args, **kwargs)
 
 
